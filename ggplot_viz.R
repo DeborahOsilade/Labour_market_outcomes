@@ -5,58 +5,74 @@ library(summarytools)
 #View summary of data
 print(dfSummary(labour_rates))
 
-#newdata as top countries 
+#new data as top countries 
 top_countries <- labour_rates
 
-#______________________________Visualization__________________________________________________________________
+#_______________Visualization__________________________________________________________________
 
 
-# identify countries with high employemnt rates
+# 1. identify countries with high employment rates
 
 summed_data <- top_countries %>%
-  group_by(country) %>%
+  group_by(country,sex,time_period,place_of_birth) %>%
   summarise(Total_Rate = sum(rates, na.rm = TRUE))
 
-topp_countries <- summed_data %>%
-  arrange(desc(Total_Rate)) %>%
-  slice_head(n = 10)
+#creating a function for labour_rate_plot
 
-# Plotting the data
-ggplot(topp_countries, aes(x = reorder(country, Total_Rate), y = Total_Rate)) +
-  geom_bar(stat = "identity") +
-  coord_flip() +
-  labs(
-    title = "Top 10 Countries with Highest Employment Rates",
-    x = "Country",
-    y = "Employment Rate"
-  ) +
-  theme_minimal()
+Firstplot <-  function(sex, year,birth,top_n) {
+  #creating usable data 
+  data_for_plot1 <- summed_data%>%
+                                  filter(sex == sex, time_period == year,place_of_birth == birth ) %>% 
+                                  arrange(desc(Total_Rate)) %>% head(as.numeric(top_n))  %>% 
+                                  arrange(desc(top_n))
+  #creating plot
+ ggplot(data_for_plot1, aes(x = reorder(country,Total_Rate,), y = Total_Rate)) +
+    geom_bar(stat = "identity", fill = "#1d2f6f") +
+   geom_text(aes(label = paste0(Total_Rate, "%")),    # Adds labels to bars
+             hjust = -0.2,                         # Adjust label position (to the right of the bars)
+             size = 4,                             # Font size of the labels
+             color = "black") +                    # Label color
+    coord_flip() +
+    labs(title = paste("Labour Rates for",birth, sex, "in", year),
+         x = "Country",
+         y = "Rates") +
+    theme(panel.background = element_blank(),
+          axis.title.x = element_text(size = 12),  # Increased font size for x-axis title
+          axis.title.y = element_text(size = 12),
+          axis.text.x = element_text(size = 14),   # Increased font size for x-axis labels
+          axis.text.y = element_text(size = 14))  # Increased font size for y-axis title
+   
+}
 
-#_________________________________________________________________________________________________
-# Visualization: Employment rate comparison
-ggplot(labour_rates, aes(x = country , y = rates, fill = `Place of birth`)) +
-  geom_bar(stat = "identity", position = "stack") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(title = "Employment Rate by Country and Birth Status", 
-       x = "Country", y = "Employment Rate (%)")
+#creating a plot for new tabpanel
+combinedplot <-  function(sex, year,top_n) {
+  #creating usable data 
+  data_for_plot5 <- summed_data%>%
+    filter(sex == sex, time_period == year) %>% 
+    arrange(desc(Total_Rate)) %>% head(as.numeric(top_n))  %>% 
+    arrange(desc(top_n)) %>%  # Select the top 'n' countries based on Total_Rate
+    mutate(Top_colour = ifelse(Total_Rate == max(Total_Rate), "pink", "grey"))
+  # Select top 'n' countries based on Total_Rate
+  
+  #creating plot
+  ggplot(data_for_plot5, aes(x = reorder(country,Total_Rate,), y = Total_Rate, fill = Top_colour)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    labs(title = paste("Labour Rates for",birth, sex, "in", year),
+         x = "Country",
+         y = "Rates") +
+    theme(panel.background = element_blank())
+}
 
 
-# Boxplot to see distribution
-ggplot(labour_rates, aes(x = `Place of birth`, y = rates, fill = Sex)) +
-  geom_boxplot() +
-  labs(title = "Distribution of Employment Rate by Birth Status", 
-       x = "Birth Status", y = "Employment Rate (%)")
 
-
-
-
-#employment gap 
+# 2. Identify employment gap between
 
 # Calculate Employment Gaps (Foreign-born - Native-born)
 employment_gap <- labour_rates %>%
-  select(`Time period`, Sex, `Place of birth`, country, rates) %>%
+  select(time_period, sex, place_of_birth, country, rates) %>%
   pivot_wider(
-    names_from = `Place of birth`,
+    names_from = place_of_birth,
     values_from = rates
   ) %>%
   mutate(
@@ -69,61 +85,38 @@ print(employment_gap)
 
 
 # Plotting the Employment Gap
-ggplot(employment_gap, aes(x = reorder(country, Employment_Gap), y = Employment_Gap, fill = Sex)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  coord_flip() +
-  theme_minimal() +
-  labs(
-    title = "Employment Gap Between Foreign-born and Native-born Workers",
-    x = "Country",
-    y = "Employment Gap (Foreign-born - Native-born)",
-    fill = "Sex"
-  )
+
+secondplot <-  function(gap,yearr,top_nn) {
+  #creating usable data 
+  data_for_plot2 <- employment_gap %>%
+                                    filter(sex == gap,time_period == yearr) %>% 
+                                    arrange(desc(Employment_Gap)) %>% 
+                                    head(as.numeric(top_nn))  %>% 
+                                     arrange(desc(top_nn)) # Select top 'n' countries based on Total_Rate
+  
+  #creating plot
+  ggplot(data_for_plot2, aes(x = reorder(country, Employment_Gap), y = Employment_Gap, 
+                             fill = ifelse(Employment_Gap > 0, "Positive gap", "Negative gap"))) +
+    geom_bar(stat = "identity", position = "dodge") +
+    geom_text(aes(label = round(Employment_Gap, 1)),    # Adds labels to bars
+              hjust = -0.2,                         # Adjust label position (to the right of the bars)
+              size = 4,                             # Font size of the labels
+              color = "black") +                    # Label color
+    coord_flip()  +
+    scale_fill_manual(values = c("Positive gap" = "#003f91", "Negative gap" = "#5da9e9")) +
+    labs(
+      title = paste( "Employment Gap Between", gap, "Workers"),
+      x = "Country",
+      y = "Employment Gap (Foreign-born - Native-born)",
+      caption = "A positive gap indicates the Foreign-born has a higher rate, while a negative gap shows the opposite"
+      )+
+    theme(panel.background = element_blank(),
+          axis.title.x = element_text(size = 12),  # Increased font size for x-axis title
+          axis.title.y = element_text(size = 12),
+          axis.text.x = element_text(size = 14),   # Increased font size for x-axis labels
+          axis.text.y = element_text(size = 14),
+          legend.position = "bottom",                       # Position legend at the bottom
+          legend.title = element_blank())                    # Remove legend title
+}
 
 
-# Define thresholds for highlighting
-high_threshold <- 5   # You can adjust this threshold
-low_threshold <- -5    # You can adjust this threshold
-
-# Categorize gaps
-employment_gap$Gap_Category <- ifelse(
-  employment_gap$Employment_Gap > high_threshold, "Positive Gap",
-  ifelse(employment_gap$Employment_Gap < low_threshold, "Negative Gap", "Small Gap")
-)
-
-# Plot with Highlighting
-ggplot(employment_gap, aes(x = reorder(country, Employment_Gap), y = Employment_Gap, fill = Gap_Category)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  coord_flip() +
-  theme_minimal() +
-  scale_fill_manual(values = c("Positive Gap" = "darkgreen", "Negative Gap" = "darkblue", "Small Gap" = "gray")) +
-  labs(
-    title = "Employment Gap Between Foreign-born and Native-born Workers (2022 - 2023)",
-    x = "Country",
-    y = "Employment Gap (Foreign-born - Native-born)",
-    fill = "Gap Category"
-  )
-
-
-# Group data by Country, Year, and Sex to compare years
-employment_gap_yearly <- labour_rates %>%
-  filter(Sex != "Total") %>%
-  group_by(country, `Time period`, Sex) %>%
-  summarise(
-    Foreign_rate = sum(rates[Place_of_birth == "Foreign-born"], na.rm = TRUE),
-    Native_rate = sum(rates[Place_of_birth == "Native-born"], na.rm = TRUE)
-  ) %>%
-  mutate(Employment_Gap = Foreign_rate - Native_rate) %>%
-  ungroup()
-
-# Plot comparing gaps across years
-ggplot(employment_gap_yearly, aes(x = reorder(country, Employment_Gap), y = Employment_Gap, fill = as.factor(`Time period`))) +
-  geom_bar(stat = "identity", position = "dodge") +
-  coord_flip() +
-  theme_minimal() +
-  labs(
-    title = "Comparison of Employment Gaps Across 2022 and 2023",
-    x = "Country",
-    y = "Employment Gap (Foreign-born - Native-born)",
-    fill = "Year"
-  )

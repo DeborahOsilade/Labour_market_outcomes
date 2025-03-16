@@ -4,10 +4,11 @@
 library(readxl)
 library(ggplot2)
 library(tidyverse)
+library(dplyr)
 library(janitor)
+library(plotly)
 
 labour_rates <- read_excel("labour rates.xlsx")
-
 
 #headers as first row
 colnames(labour_rates) <-  paste0("V", seq_along(labour_rates))
@@ -73,3 +74,6 @@ labour_rates$rates <-round(labour_rates$rates,1)
 
 labour_rates <- janitor::clean_names(labour_rates)
 
+print(labour_rates)
+
+labour_rates$time_period <-  as.numeric(labour_rates$time_period)
